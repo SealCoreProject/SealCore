@@ -1,6 +1,7 @@
 # The unused dir
 .bloop
 .metals
+.scalafmt.conf
 
 ### Project Specific stuff
 test_run_dir/*
