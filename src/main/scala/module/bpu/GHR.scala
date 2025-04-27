@@ -5,18 +5,29 @@ import chisel3.util._
 import utils._
 import defs._
 
+/** GHR 模組
+  *
+  * @param length
+  *   表示 GHR 表長度
+  */
 class GHR(val length: Int) extends Module {
-  val io = IO(new Bundle {
-    val updateValid = Input(Bool())
-    val taken = Input(Bool())
-    val current = Output(UInt(length.W))
-  })
-
   val history = RegInit(0.U(length.W))
 
-  when(io.updateValid) {
-    history := Cat(history(length - 2, 0), io.taken) // 左移加入新分支結果
+  /** 更新history
+    *
+    * @param taken
+    *   跳轉情況
+    */
+  def update(taken: Bool): Unit = {
+    this.history := Cat(this.history(length - 2, 0), taken)
   }
 
-  io.current := history
+  /** 獲得當前history
+    *
+    * @return
+    *   history
+    */
+  def get(): UInt = {
+    history
+  }
 }

@@ -12,6 +12,12 @@ object XLen extends Enumeration {
   val _32, _64 = Value
 }
 
+/** 用於指定Instr的長度, 目前不支持壓縮指令
+  */
+object InstrLen extends Enumeration {
+  val _32 = Value
+}
+
 /** 這個是一個全局的配置表，用於控制項目功能啓動、代碼的選擇編譯等等。
   *
   * 在這個配置表中，不應該出現任何 RTL 代碼，僅僅應該用於指定各種封裝好的選項
@@ -20,7 +26,8 @@ object XLen extends Enumeration {
   */
 private[config] object GlobalConfig {
   def apply() = Map(
-    "XLen" -> XLen._32
+    "XLen" -> XLen._32,
+    "InstrLen" -> InstrLen._32
   )
 }
 

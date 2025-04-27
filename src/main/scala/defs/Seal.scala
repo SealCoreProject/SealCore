@@ -6,6 +6,7 @@ import chisel3.util._
 import chisel3.util.experimental.BoringUtils
 
 import config._
+import utils._
 
 /** 參數特質, 通過混入進行傳遞
   *
@@ -57,9 +58,16 @@ trait HasSealParameter {
   val DataBytes = DataBits / 8
 }
 
+trait HasHashMethod {
+  val hashMethod = Hash.XorRotateModPrime
+}
+
 /** 虛類, 將 chisel3.Module 混入特質以簡化參數傳遞
   */
-abstract class SealModule extends Module with HasSealParameter
+abstract class SealModule
+    extends Module
+    with HasSealParameter
+    with HasHashMethod
 
 /** 虛類, 將 chisel3.Bundle 混入特質以簡化參數傳遞
   */
