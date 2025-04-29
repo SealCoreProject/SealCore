@@ -11,23 +11,20 @@ import defs._
   *   表示 GHR 表長度
   */
 class GHR(val length: Int) extends Module {
+  val io = IO(new Bundle {
+    /* 獲得當前history */
+    val out = Output(UInt(length.W))
+
+    // Valid 代表更新. Bits 代表跳轉情況
+    val taken = Input(Valid(Bool()))
+  })
+
   val history = RegInit(0.U(length.W))
 
-  /** 更新history
-    *
-    * @param taken
-    *   跳轉情況
-    */
-  def update(taken: Bool): Unit = {
-    this.history := Cat(this.history(length - 2, 0), taken)
+  // 更新history
+  when(io.taken.valid) {
+    history := Cat(history(length - 2, 0), io.taken.bits)
   }
 
-  /** 獲得當前history
-    *
-    * @return
-    *   history
-    */
-  def get(): UInt = {
-    history
-  }
+  io.out := history
 }

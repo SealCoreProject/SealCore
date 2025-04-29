@@ -90,6 +90,7 @@ class TageEntry(val tagWidth: Int) extends Bundle {
   def init(isTaken: Bool, tag: UInt) = {
     this.pred := Mux(isTaken, 4.U, 3.U)
     this.tag := tag
+    this.u := 0.U
   }
 
   /** 表項是否有效（實際應用中你可以額外加 valid 位，但通常靠 tag 匹配判斷） */
@@ -98,18 +99,19 @@ class TageEntry(val tagWidth: Int) extends Bundle {
   def msb: Bool = u(1)
   def lsb: Bool = u(0)
 
-  def isUseless: Bool = !this.isUseless
   def isUseful: Bool = (msb | lsb)
+  def isUseless: Bool = !this.isUseful
 }
 
 /** TAGE Table 模塊
   */
-class TageTable(val indexWidth: Int, val tagWidth: Int, val numEntries: Int)
-    extends Module {
+class TageTable(val tagWidth: Int, val numEntries: Int) extends Module {
+  val idxWidth = log2Ceil(numEntries)
+
   val io = IO(new Bundle {
 
     /** 用於索引 Table entry, 通過GHR獲得 */
-    val index = Input(UInt(indexWidth.W))
+    val idx = Input(UInt(idxWidth.W))
 
     /** 傳入 Hash(PC, GHR) 後的Tag. */
     val tag = Input(UInt(tagWidth.W))
@@ -117,76 +119,65 @@ class TageTable(val indexWidth: Int, val tagWidth: Int, val numEntries: Int)
     /** 當 Valid 拉高, 當前級 Tage 提出有效預測. */
     val pred = Output(Valid(Bool()))
 
-    // Update & Replacement logic
-    val doUpdate = Input(Bool()) // 是否執行 update
-    val isCorrect = Input(Bool()) // 預測是否正確
-    val isTaken = Input(Bool()) // 真實跳轉結果
-    val altBetter = Input(Bool()) // 是否 altpred 與 fpred 不一致
+    /* === 更新位 === */
+    /* 将后端情况前递到预测, 进行信息更新 */
+    val update = Input(new Bundle {
+      /* idx, 直接訪問, 永遠輸出isAllocable */
+      val idx = UInt(idxWidth.W)
+      val tag = UInt(tagWidth.W)
+      /* 計算後的實際跳轉情況 */
+      val isTaken = Bool()
+      /* 是否預測錯誤 */
+      val isWrong = Bool()
 
-    val doAlloc = Input(Bool()) // 是否執行替換分配
-    val newPred = Input(Bool()) // 初始化分支跳轉方向
+      /** 拉高表示調整Entry的參數(也就是Pred和U) */
+      val doTune = Bool()
 
-    val resetAging = Input(Bool()) // 是否觸發 aging
-    val agingMSB = Input(Bool()) // 控制 aging MSB or LSB
+      /** 拉高时表示需要分配一个新的 */
+      val doAlloc = Bool()
+
+      /** 拉高表示需要衰老 */
+      val doAging = Bool()
+    })
+    val isAllocatable = Output(Bool())
   })
 
   val table = RegInit(
     VecInit(Seq.fill(numEntries)(0.U.asTypeOf(new TageEntry(tagWidth))))
   )
-  val entry = table(io.index) // 通過 index 索引 entry.
+  val entry = table(io.idx) // 通過 index 索引 entry.
 
   io.pred.valid := entry.isValid(io.tag) // Tag 相等, 預測有效.
   io.pred.bits := entry.isTaken // 當最高位爲1, 認爲跳轉.
 
-  def isAllocatable(idx: UInt): Bool = {
-    val entry = this.table(idx)
-    entry.isUseless
-  }
+  // 通過下標獲得Update Entry
+  val uentry = table(io.update.idx)
+  io.isAllocatable := uentry.isUseless
 
-  /** 嘗試分配新表项
-    *
-    * @note
-    *   之所以每次错误预测，都只会分配一个且仅此一个表项，是为了最小化一些偶发性或者与分支历史不甚相关的分支指令占据过多的表项的现象。
-    *
-    * @note
-    *   定義爲方法, 是因爲可能某一個Clock內, 預測與分配同時發生, 需要並行
-    */
-  def alloc(idx: UInt, tag: UInt, taken: Bool): Unit = {
-    val entry = this.table(idx)
-
-    entry.init(taken, tag)
-  }
-
-  /** Tage Table Update
-    */
-  def update(
-      idx: UInt,
-      tag: UInt,
-      taken: Bool,
-      isPredMiss: Bool
-  ): Unit = {
-    val entry = this.table(idx)
-
-    when(entry.isValid(tag)) {
-      when(taken) {
-        entry.increasePred
-      }.otherwise {
-        entry.decreasePred
-      }
-    }
-
-    when(isPredMiss) {
-      entry.decreaseUseful
+  // 進行Entry參數調整
+  when(io.update.doTune) {
+    // when(uentry.isValid(io.update.tag)) {
+    when(io.update.isTaken) {
+      uentry.increasePred
     }.otherwise {
-      entry.increaseUseful
+      uentry.decreasePred
+    }
+    // }
+
+    when(io.update.isWrong) {
+      uentry.decreaseUseful
+    }.otherwise {
+      uentry.increaseUseful
     }
   }
 
-  def aging(idx: UInt): Unit = {
-    val entry = this.table(idx)
+  // 進行分配新Entry
+  when(io.update.doAlloc) {
+    uentry.init(io.update.isTaken, io.update.tag)
+  }
 
-    when(!entry.isUseless) {
-      entry.aging
-    }
+  // 對Entry進行老化
+  when(io.update.doAging) {
+    uentry.aging
   }
 }

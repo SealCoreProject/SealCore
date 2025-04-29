@@ -1,4 +1,4 @@
-package module.bpu
+package module.bpu.basic
 
 import chisel3._
 import chisel3.util._
@@ -18,8 +18,10 @@ class Bimodal(val nEntries: Int = 512) extends Module {
     val idx = Input(UInt(idxBits.W))
     val pred = Output(Bool())
 
-    // val update = Input(Bool())
-    // val taken = Input(Bool())
+    val update = Input(Valid(new Bundle {
+      val taken = Bool()
+      val idx = UInt(idxBits.W)
+    }))
   })
 
   val table = RegInit(VecInit(Seq.fill(nEntries)(1.U(2.W)))) // 01 弱不跳
@@ -28,21 +30,13 @@ class Bimodal(val nEntries: Int = 512) extends Module {
 
   io.pred := counter(1) // 高位作為預測（簡單粗暴）
 
-  def update(taken: Bool, idx: UInt): Unit = {
-    val ctr = this.table(idx)
-
+  // 用於更新
+  val ctr = table(io.update.bits.idx)
+  when(io.update.valid) {
     ctr := Mux(
-      taken,
+      io.update.bits.taken,
       Mux(ctr =/= 3.U, ctr + 1.U, ctr),
       Mux(ctr =/= 0.U, ctr - 1.U, ctr)
     )
   }
-
-  // when(io.update) {
-  //   when(io.taken && counter =/= 3.U) {
-  //     counter := counter + 1.U
-  //   }.elsewhen(!io.taken && counter =/= 0.U) {
-  //     counter := counter - 1.U
-  //   }
-  // }
 }

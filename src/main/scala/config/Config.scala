@@ -1,7 +1,5 @@
 package config
 
-import scala.annotation.meta.field
-
 /** 用於選擇架構寬度。
   *
   * 這個機器字長雖然是架構無關內容，理應在Config中指定。
