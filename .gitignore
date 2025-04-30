@@ -2,6 +2,7 @@
 .bloop
 .metals
 .scalafmt.conf
+.hdl_checker
 
 ### Project Specific stuff
 test_run_dir/*

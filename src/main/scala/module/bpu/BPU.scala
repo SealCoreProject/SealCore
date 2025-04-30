@@ -5,6 +5,7 @@ import chisel3.util._
 import utils._
 import defs._
 import module.bpu.tage.MiniTage
+import module.bpu.tage.MiniTagePred
 
 /** 分支預測單元更新包.
   *
@@ -55,9 +56,7 @@ trait HasBPUParameter {
 class BPU_embedded extends SealModule with HasBPUParameter {
   val io = IO(new BPUIO)
 
-  // ====== 模塊實例化 ======
-  val ghr = Module(new GHR(ghrLen)) // GHR 長度可調
-  // val miniTage = Module(new MiniTage(ghrLen))
+  val miniTage = Module(new MiniTagePred())
 
   // ===== 預測邏輯(只針對 BTBtype.B) =====
 }

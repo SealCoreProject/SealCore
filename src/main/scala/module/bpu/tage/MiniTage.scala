@@ -11,7 +11,7 @@ import config.InstrLen
 import module.bpu.basic._
 
 /* MiniTage 預測器參數 */
-trait HasMiniTageParameter {
+private[tage] trait HasMiniTageParameter {
 
   /* entry.Tag 位寬 */
   val entryTagWidth = 6
@@ -36,7 +36,7 @@ trait HasMiniTageParameter {
   *
   * 對於大多數預測算法, 其在更新時需要依賴的信息不同, 因此我們沒有將它封裝爲公共服務, 而是由每個模塊自己定義
   */
-class PCPNInfo extends SealBundle with HasMiniTageParameter {
+private[tage] class PCPNInfo extends SealBundle with HasMiniTageParameter {
 
   /** 用於查詢 Tage Table 的 `修正下標`
     *
@@ -65,7 +65,9 @@ class PCPNInfo extends SealBundle with HasMiniTageParameter {
 
 /** 更新包
   */
-class MiniTageUpdateIO extends SealBundle with HasMiniTageParameter {
+private[tage] class MiniTageUpdateIO
+    extends SealBundle
+    with HasMiniTageParameter {
   val pcpn = new PCPNInfo()
   val bpu = new BPUUpdate()
 }
@@ -105,7 +107,7 @@ class MiniTageUpdateIO extends SealBundle with HasMiniTageParameter {
   *
   * @since 1.0.0
   */
-class MiniTage extends SealModule with HasMiniTageParameter {
+private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
   val io = IO(new Bundle {
     // 用於預測的PC
     val pc = Input(UInt(VAddrBits.W))

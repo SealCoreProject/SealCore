@@ -6,7 +6,7 @@ import utils._
 
 /** T_N表是使用PC与对应全局分支历史长度进行哈希索引的带标签表, TageEntry 定義了其每个表项的數據結構
   */
-class TageEntry(val tagWidth: Int) extends Bundle {
+private[tage] class TageEntry(val tagWidth: Int) extends Bundle {
 
   /** 3位的饱和计数器, 最高位表示预测跳转与否, 1表示预测跳转(taken), 0表示预测不跳转(not-taken)
     */
@@ -105,7 +105,8 @@ class TageEntry(val tagWidth: Int) extends Bundle {
 
 /** TAGE Table 模塊
   */
-class TageTable(val tagWidth: Int, val numEntries: Int) extends Module {
+private[tage] class TageTable(val tagWidth: Int, val numEntries: Int)
+    extends Module {
   val idxWidth = log2Ceil(numEntries)
 
   val io = IO(new Bundle {

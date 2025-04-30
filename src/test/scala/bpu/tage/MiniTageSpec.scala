@@ -262,9 +262,9 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         }
 
         // 打印预測信息
-        dprintln(
-          s"pc ${pc} taken ${taken} pred ${predict} tableIdx ${pcpn_tableIdx} entryIdx ${pcpn_entryIdx}"
-        )
+        // dprintln(
+        //   s"pc ${pc} taken ${taken} pred ${predict} tableIdx ${pcpn_tableIdx} entryIdx ${pcpn_entryIdx}"
+        // )
 
         // 根据结果进行修正
         dut.io.in.update.valid.poke(true.B)
@@ -279,7 +279,7 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
       }
 
       // 打印最终的准确率
-      println(
+      dprintln(
         s"Final Accuracy after $predNum predictions: $correct_predictions/$total_predictions"
       )
       println(s"Accuracy History: ${accuracyHistory.mkString(", ")}")
@@ -292,7 +292,7 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
             f"T$tid=${snapshot.getOrElse(tid, 0.0) * 100}%.1f%%"
           }
           .mkString(", ")
-        println(f"Cycle ${i * 50}%4d - ${(i + 1) * 10 - 1}%4d: $formatted")
+        dprintln(f"Cycle ${i * 50}%4d - ${(i + 1) * 10 - 1}%4d: $formatted")
       }
 
       // 期望：在训练开始后，准确率逐渐提高
