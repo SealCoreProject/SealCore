@@ -11,7 +11,7 @@ import defs._
   *
   * @param nEntries
   */
-private[basic] class Bimodal(val nEntries: Int = 512) extends Module {
+class Bimodal(val nEntries: Int = 512) extends Module {
   val idxBits = log2Ceil(nEntries)
 
   val io = IO(new Bundle {
