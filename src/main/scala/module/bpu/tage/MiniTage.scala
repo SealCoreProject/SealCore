@@ -100,7 +100,7 @@ private[tage] class MiniTageUpdateIO
   *     - Index 由 PC 與 GHR Hash 得到.
   *
   * @note
-  *   version 記錄: 1.0.0 保證了功能性的絕對正確. Commit Log:<>
+  *   version 記錄: 1.0.0 保證了功能性的絕對正確. Commit Log:<0c829d8>
   *
   * @version 1.0.0
   *
