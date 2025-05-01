@@ -5,7 +5,7 @@ import chisel3.util._
 import utils._
 import defs._
 import module.bpu.tage.MiniTage
-import module.bpu.BPUUpdate
+import module.bpu.BTBUpdate
 
 class MiniTagePredIO extends SealBundle {
   val in = new SealBundle {

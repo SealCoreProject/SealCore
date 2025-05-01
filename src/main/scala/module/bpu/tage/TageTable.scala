@@ -105,8 +105,7 @@ private[tage] class TageEntry(val tagWidth: Int) extends Bundle {
 
 /** TAGE Table 模塊
   */
-private[tage] class TageTable(val tagWidth: Int, val numEntries: Int)
-    extends Module {
+class TageTable(val tagWidth: Int, val numEntries: Int) extends Module {
   val idxWidth = log2Ceil(numEntries)
 
   val io = IO(new Bundle {
@@ -157,13 +156,11 @@ private[tage] class TageTable(val tagWidth: Int, val numEntries: Int)
 
   // 進行Entry參數調整
   when(io.update.doTune) {
-    // when(uentry.isValid(io.update.tag)) {
     when(io.update.isTaken) {
       uentry.increasePred
     }.otherwise {
       uentry.decreasePred
     }
-    // }
 
     when(io.update.isWrong) {
       uentry.decreaseUseful

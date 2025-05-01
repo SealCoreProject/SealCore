@@ -18,9 +18,9 @@ trait HasPredParameter {
 class Predictor extends SealModule with HasPredParameter {
   val io = IO(new PredictorIO)
 
-  // ==== 模塊實例化 ====
-  val miniTage = Module(new MiniTage())
+  // // ==== 模塊實例化 ====
+  // val miniTage = Module(new MiniTage())
 
   // ==== 預測邏輯(只針對 BTBtype.B) ====
-  miniTage.io.pc := io.pc
+  // miniTage.io.pc := io.pc
 }

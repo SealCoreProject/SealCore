@@ -11,7 +11,7 @@ import module.bpu.tage.MiniTagePred
   *
   * 定義了用於更新分支預測單元信息的格式.
   */
-class BPUUpdate extends SealBundle {
+class BTBUpdate extends SealBundle {
 
   /** 更新時需要提供 PC
     */
@@ -44,7 +44,7 @@ class BPUIO extends SealBundle {
   /* BTB 類型 */
   val btbType = Input(BTBtype())
   /* 預測更新信息 */
-  val update = Input(Valid(new BPUUpdate))
+  val update = Input(Valid(new BTBUpdate))
   /* 方向預測, 只對Btype有效 */
   val predition = Output(Bool())
 }

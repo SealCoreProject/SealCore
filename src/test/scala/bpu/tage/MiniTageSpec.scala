@@ -8,6 +8,8 @@ import org.scalatest.matchers.must.Matchers
 
 import module.bpu.tage.{MiniTage, MiniTagePred}
 import testutils.HasDebugPrint
+import utils.LogUtil
+import utils.LogLevel.LogLevel
 
 /** This is a trivial example of how to run this Specification
   *
@@ -127,8 +129,7 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         val predict = dut.io.out.pred.peek().litToBoolean
         // 獲得PCPN隨遞信息
         val pcpn_tableIdx = dut.io.out.pcpn.tableIdx.peek()
-        val pcpn_entryIdx = dut.io.out.pcpn.entryIdx.peek()
-        val pcpn_entryTag = dut.io.out.pcpn.entryTag.peek()
+        val pcpn_ghr = dut.io.out.pcpn.ghr.peek()
 
         if (predict == taken) {
           correct_predictions += 1
@@ -136,19 +137,13 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
 
         total_predictions += 1
 
-        // 打印預測信息
-        dprintln(
-          s"pc ${pc} taken ${taken} pred ${predict} tableIdx ${pcpn_tableIdx} entryIdx ${pcpn_entryIdx}"
-        )
-
         // 根據結果進行修正
         dut.io.in.update.valid.poke(true.B)
-        dut.io.in.update.bits.bpu.pc.poke(pc)
-        dut.io.in.update.bits.bpu.actualTaken.poke(taken.B)
-        dut.io.in.update.bits.bpu.isMissPredict.poke((predict != taken).B)
+        dut.io.in.update.bits.btb.pc.poke(pc)
+        dut.io.in.update.bits.btb.actualTaken.poke(taken.B)
+        dut.io.in.update.bits.btb.isMissPredict.poke((predict != taken).B)
         dut.io.in.update.bits.pcpn.tableIdx.poke(pcpn_tableIdx)
-        dut.io.in.update.bits.pcpn.entryIdx.poke(pcpn_entryIdx)
-        dut.io.in.update.bits.pcpn.entryTag.poke(pcpn_entryTag)
+        dut.io.in.update.bits.pcpn.ghr.poke(pcpn_ghr)
 
         dut.clock.step(1)
       }
@@ -162,6 +157,9 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
 
   "MiniTage should correctly predict when there are complex jump patterns" in {
     debugPrint = false
+    tracePrint = false
+    LogUtil.display = false
+    LogUtil.currentLogLevel = utils.LogLevel.TRACE
     simulate(new MiniTagePred()) { dut =>
       // 1) 模拟 while(true) 循环中的 if 判断
       // 对于PC1，代表判断 while 是否继续，PC2 判断是否退出。PC1 总是跳转，PC2 50次不跳转后进行一次跳转
@@ -189,8 +187,33 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         else ((i * 4).U, false) // 不跳转
       }
 
+      // 4) 模擬需要長歷史才能準確預測的複雜模式
+      val complexHistoryTestSeq = (0 until 2000).map { i =>
+        val pcBase = 0x10000 // 與其他PC區隔開來
+
+        // 假設PC10 每97次跳轉一次，但實際是：
+        // - 每次 i % 97 == 0 -> true
+        // - 其他 false，但有時又根據 i 的二進位某些bit來決定
+        val pc10_taken = (i % 97 == 0) || ((i ^ (i >> 3)) % 113 == 0)
+
+        // PC11：只有當 i % 101 == 0 且上一個是跳轉才跳（間接依賴）
+        val pc11_taken = (i % 101 == 0) && pc10_taken
+
+        // PC12：如果i在奇素數週期中，或GHR樣式混合，才跳轉
+        val pc12_taken = Set(3, 5, 7, 11, 13, 17, 19).exists(p => i % p == 0) &&
+          ((i ^ (i >> 5)) & 1) == 1
+
+        val pattern = Seq(
+          (pcBase + 0).U -> pc10_taken,
+          (pcBase + 4).U -> pc11_taken,
+          (pcBase + 8).U -> pc12_taken
+        )
+        pattern
+      }.flatten
+
       // 合并所有测试序列
-      val testSeq = whileTestSeq ++ forTestSeq ++ otherTestSeq
+      val testSeq =
+        whileTestSeq ++ forTestSeq ++ otherTestSeq ++ complexHistoryTestSeq
 
       // 模拟多少轮
       val predNum = testSeq.length
@@ -203,8 +226,10 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
       var correct_predictions = 0
       var total_predictions = 0
       var accuracyHistory = Seq[Double]()
-      // 表使用統計：每10次記一次比例
-      val tableUseCount =
+      // 表使用統計：每50次記一次比例
+      val tableUseCountPerTimes =
+        scala.collection.mutable.Map[Int, Int]().withDefaultValue(0)
+      val tableUseCountAllways =
         scala.collection.mutable.Map[Int, Int]().withDefaultValue(0)
       val tableProportionHistory =
         scala.collection.mutable.ArrayBuffer[Map[Int, Double]]()
@@ -218,11 +243,11 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         val predict = dut.io.out.pred.peek().litToBoolean
         // 獲得PCPN隨遞信息
         val pcpn_tableIdx = dut.io.out.pcpn.tableIdx.peek()
-        val pcpn_entryIdx = dut.io.out.pcpn.entryIdx.peek()
-        val pcpn_entryTag = dut.io.out.pcpn.entryTag.peek()
+        val pcpn_ghr = dut.io.out.pcpn.ghr.peek()
 
         // 統計用哪張表
-        tableUseCount(pcpn_tableIdx.litValue.toInt) += 1
+        tableUseCountPerTimes(pcpn_tableIdx.litValue.toInt) += 1
+        tableUseCountAllways(pcpn_tableIdx.litValue.toInt) += 1
 
         // 正確率統計
         if (predict == taken) {
@@ -237,66 +262,65 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
           val accuracy = correct_predictions.toDouble / total_predictions
           accuracyHistory :+= accuracy
           dprintln(s"Accuracy at cycle ${total_predictions}: $accuracy")
-          // 表使用頻率
-          val total = tableUseCount.values.sum.max(1)
-          val snapshot = (0 to 4).map { i =>
-            i -> tableUseCount.getOrElse(i, 0).toDouble / total
-          }.toMap
-          tableProportionHistory.append(snapshot)
-          tableUseCount.clear()
         }
 
         // 每50次打印一次表使用頻率
         if (total_predictions % 50 == 0) {
-          // 準確率
-          val accuracy = correct_predictions.toDouble / total_predictions
-          accuracyHistory :+= accuracy
-          dprintln(s"Accuracy at cycle ${total_predictions}: $accuracy")
           // 表使用頻率
-          val total = tableUseCount.values.sum.max(1)
+          val total = tableUseCountPerTimes.values.sum.max(1)
           val snapshot = (0 to 4).map { i =>
-            i -> tableUseCount.getOrElse(i, 0).toDouble / total
+            i -> tableUseCountPerTimes.getOrElse(i, 0).toDouble / total
           }.toMap
           tableProportionHistory.append(snapshot)
-          tableUseCount.clear()
+          tableUseCountPerTimes.clear()
         }
 
         // 打印预測信息
-        // dprintln(
-        //   s"pc ${pc} taken ${taken} pred ${predict} tableIdx ${pcpn_tableIdx} entryIdx ${pcpn_entryIdx}"
-        // )
+        tprintln(
+          s"pc ${pc} taken ${taken} pred ${predict} tableIdx ${pcpn_tableIdx}"
+        )
 
         // 根据结果进行修正
         dut.io.in.update.valid.poke(true.B)
-        dut.io.in.update.bits.bpu.pc.poke(pc)
-        dut.io.in.update.bits.bpu.actualTaken.poke(taken.B)
-        dut.io.in.update.bits.bpu.isMissPredict.poke((predict != taken).B)
+        dut.io.in.update.bits.btb.pc.poke(pc)
+        dut.io.in.update.bits.btb.actualTaken.poke(taken.B)
+        dut.io.in.update.bits.btb.isMissPredict.poke((predict != taken).B)
         dut.io.in.update.bits.pcpn.tableIdx.poke(pcpn_tableIdx)
-        dut.io.in.update.bits.pcpn.entryIdx.poke(pcpn_entryIdx)
-        dut.io.in.update.bits.pcpn.entryTag.poke(pcpn_entryTag)
+        dut.io.in.update.bits.pcpn.ghr.poke(pcpn_ghr)
 
         dut.clock.step(1)
       }
 
       // 打印最终的准确率
-      dprintln(
+      println(
         s"Final Accuracy after $predNum predictions: $correct_predictions/$total_predictions"
       )
-      println(s"Accuracy History: ${accuracyHistory.mkString(", ")}")
+      dprintln(s"Accuracy History: ${accuracyHistory.mkString(", ")}")
 
       // 最後的表使用統計
-      println(s"[TAGE 表使用佔比統計，每50次一次]")
+      dprintln(s"TAGE table usage percentage statistics, once every 50 times:")
       tableProportionHistory.zipWithIndex.foreach { case (snapshot, i) =>
         val formatted = (0 to 4)
           .map { tid =>
             f"T$tid=${snapshot.getOrElse(tid, 0.0) * 100}%.1f%%"
           }
           .mkString(", ")
-        dprintln(f"Cycle ${i * 50}%4d - ${(i + 1) * 10 - 1}%4d: $formatted")
+        dprintln(f"Cycle ${i * 50}%4d - ${(i + 1) * 50 - 1}%4d: $formatted")
       }
+      println(s"TAGE table usage percentage statistics throughout history")
+      val total = tableUseCountAllways.values.sum.max(1)
+      val finalcount = (0 to 4).map { i =>
+        i -> tableUseCountAllways.getOrElse(i, 0).toDouble / total
+      }.toMap
+      val formatted = (0 to 4)
+        .map { tid =>
+          f"T$tid=${finalcount.getOrElse(tid, 0.0) * 100}%.1f%%"
+        }
+        .mkString(", ")
+      println(f"Throughout history: $formatted")
 
       // 期望：在训练开始后，准确率逐渐提高
-      accuracyHistory.last must be >= 0.8
+      accuracyHistory.last must be >= 0.85
     }
   }
   // "MiniTage should not explode on edge cases" in {

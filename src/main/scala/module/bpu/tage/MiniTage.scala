@@ -5,7 +5,7 @@ import chisel3.util._
 import utils._
 import defs._
 import module.bpu._
-import module.bpu.BPUUpdate
+import module.bpu.BTBUpdate
 import config.Config
 import config.InstrLen
 import module.bpu.basic._
@@ -14,7 +14,7 @@ import module.bpu.basic._
 private[tage] trait HasMiniTageParameter {
 
   /* entry.Tag 位寬 */
-  val entryTagWidth = 6
+  val entryTagWidth = 16
 
   /** 條目總數
     *
@@ -35,6 +35,12 @@ private[tage] trait HasMiniTageParameter {
 /** 用於Mini Tage 的PCPN Info
   *
   * 對於大多數預測算法, 其在更新時需要依賴的信息不同, 因此我們沒有將它封裝爲公共服務, 而是由每個模塊自己定義
+  *
+  * @note
+  *   - 我們僅僅傳遞GHR, 可以避免傳遞大量額外信息, 節省位寬.
+  *   - 理論上而言, 每一個Table都有可能更新, 而每一個Table更新依賴的信息, 主要是 EntryIdx 和 EntryTag(由GHR計算)
+  *   - 尤其是當Table數量較大時, 傳遞信息需要的流水間寄存器將會非常大. 基於此, 我們選擇了傳遞GHR.
+  *   - 代價就是會在分支預測模塊的面積會更大一些.
   */
 private[tage] class PCPNInfo extends SealBundle with HasMiniTageParameter {
 
@@ -51,16 +57,9 @@ private[tage] class PCPNInfo extends SealBundle with HasMiniTageParameter {
     */
   val tableIdx = Output(UInt(tableIdxWidth.W))
 
-  /** 用於查詢某一個Table內的條目的下標.
-    *
-    * @note
-    *   我們將basePred的長度與TageTable保持一致,就是爲了節省這個下標的位寬.
+  /** 傳遞當時的GHR, 用於計算當時的Idx和Tag.
     */
-  val entryIdx = Output(UInt(entryIdxWidth.W))
-
-  /** 用於判斷某一個Table內的Tag, 這樣可以進一步檢查是否是同一個Table.
-    */
-  val entryTag = Output(UInt(entryTagWidth.W))
+  val ghr = Output(UInt(ghrLens.last.W))
 }
 
 /** 更新包
@@ -69,7 +68,7 @@ private[tage] class MiniTageUpdateIO
     extends SealBundle
     with HasMiniTageParameter {
   val pcpn = new PCPNInfo()
-  val bpu = new BPUUpdate()
+  val btb = new BTBUpdate()
 }
 
 /** MiniTage predictor
@@ -100,7 +99,10 @@ private[tage] class MiniTageUpdateIO
   *     - Tag 固定, Tag 不含 GHR
   *     - Index 由 PC 與 GHR Hash 得到.
   *
-  * @version 0.1.0
+  * @note
+  *   version 記錄: 1.0.0 保證了功能性的絕對正確. Commit Log:<>
+  *
+  * @version 1.0.0
   *
   * @author
   *   Marina Zhang <inchinaxiaofeng@gmail.com>
@@ -108,6 +110,7 @@ private[tage] class MiniTageUpdateIO
   * @since 1.0.0
   */
 private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
+  implicit val moduleName: String = this.name
   val io = IO(new Bundle {
     // 用於預測的PC
     val pc = Input(UInt(VAddrBits.W))
@@ -141,7 +144,7 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
       entryIdxWidth
     )
   )
-  val entryTags = ghrLens.map(_ =>
+  val entryTags = ghrLens.map(l =>
     Hash(
       io.pc(VAddrBits - 1, 2),
       ghr.io.out,
@@ -151,6 +154,7 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
   )
   val tablesRev = tageTables.reverse
   val tablesIdxRev = tageTables.zipWithIndex.reverse
+  val tablesIdx = tageTables.zipWithIndex
 
   // ==== 預測邏輯  ====
   // === 命中順位計算 ===
@@ -162,7 +166,7 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
   )
 
   // 對預測功能需要的接口進行驅動
-  for ((table, idx) <- tageTables.zipWithIndex) {
+  for ((table, idx) <- tablesIdx) {
     table.io.idx := entryIdxs(idx)
     table.io.tag := entryTags(idx)
   }
@@ -173,42 +177,52 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
   io.pcpn.tableIdx := PriorityMux(
     tablesIdxRev.map(t => (t._1.io.pred.valid, (t._2 + 1).U)) :+ (true.B, 0.U)
   )
-  io.pcpn.entryIdx := PriorityMux(
-    tablesIdxRev.map(t =>
-      (t._1.io.pred.valid, entryIdxs(t._2))
-    ) :+ (true.B, ghr.io.out(entryIdxWidth - 1, 0))
-  )
-  io.pcpn.entryTag := PriorityMux(
-    tablesIdxRev.map(t =>
-      (t._1.io.pred.valid, entryTags(t._2))
-    ) :+ (true.B, 0.U)
-  )
+  io.pcpn.ghr := ghr.io.out
 
   // ==== 更新邏輯 ====
-  // Update. 前綴u代表Update
+  // === 重命名信號 Update. 前綴u代表Update ===
+  val uvalid = io.update.valid
   val upcpn = io.update.bits.pcpn
-  val utaken = io.update.bits.bpu.actualTaken
-  val uwrong = io.update.bits.bpu.isMissPredict
+  val upc = io.update.bits.btb.pc
+  val utaken = io.update.bits.btb.actualTaken
+  val uwrong = io.update.bits.btb.isMissPredict
+
+  // === 計算更新需要的Idx與Tag信息 ===
+  val uEntryIdxs = ghrLens.map(l =>
+    Hash(
+      upc(VAddrBits - 1, 2),
+      upcpn.ghr(l - 1, 0),
+      Hash.XorRotateModPrime,
+      entryIdxWidth
+    )
+  )
+  val uEntryTags = ghrLens.map(l =>
+    Hash(
+      upc(VAddrBits - 1, 2),
+      upcpn.ghr,
+      Hash.Xor,
+      entryTagWidth
+    )
+  )
 
   // === GHR 更新 ===
-  ghr.io.taken.valid := io.update.valid
+  ghr.io.taken.valid := uvalid
   ghr.io.taken.bits := utaken
 
   // === base predictor 更新 ===
-  basePred.io.update.valid := io.update.valid
-  basePred.io.update.bits.idx := upcpn.entryIdx
+  basePred.io.update.valid := uvalid
+  basePred.io.update.bits.idx := upcpn.ghr(entryIdxWidth - 1, 0)
   basePred.io.update.bits.taken := utaken
 
   // === 獲得 分配候選 向量 ===
-  val allocCandidates = tageTables.zipWithIndex.map(t =>
-    ((t._2 + 1).U > upcpn.tableIdx) && t._1.io.isAllocatable
-  )
+  val allocCandidates =
+    tablesIdx.map(t => ((t._2 + 1).U > upcpn.tableIdx) && t._1.io.isAllocatable)
   val winner = PriorityEncoderOH(allocCandidates)
 
   // === 前遞信號驅動 ===
-  for ((table, idx) <- tageTables.zipWithIndex) {
-    table.io.update.idx := upcpn.entryIdx
-    table.io.update.tag := upcpn.entryTag
+  for ((table, idx) <- tablesIdx) {
+    table.io.update.idx := uEntryIdxs(idx)
+    table.io.update.tag := uEntryTags(idx)
     table.io.update.isTaken := utaken
     table.io.update.isWrong := uwrong
 
@@ -219,7 +233,7 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
 
   // === 預測錯誤的更新 ===
   // 如果tableIdx === ghrLens.length, 其實將會沒有候選人, 因此不需要額外判斷
-  for ((table, idx) <- tageTables.zipWithIndex) {
+  for ((table, idx) <- tablesIdx) {
     when(uwrong && io.update.valid) {
       when(PopCount(winner) =/= 0.U) { // 有可分配的
         table.io.update.doAlloc := winner(idx)
@@ -227,11 +241,27 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
       }.otherwise { // 沒有 Allocatable, 做 u aging
         // 涉及到與upcpn的交互, 修正下標
         table.io.update.doAlloc := false.B
-        table.io.update.doAging := (idx + 1).U > upcpn.entryIdx
+        table.io.update.doAging := (idx + 1).U > upcpn.tableIdx
       }
     }.otherwise { // 不需要更新就保持緘默
       table.io.update.doAlloc := false.B
       table.io.update.doAging := false.B
     }
   }
+
+  // ==== Log 輸出 ====
+  Trace(
+    "[Update] AllocCandidates %b Winner %b pcpn: TableIdx %x GHR %b bpu: PredWrong %x\n",
+    Cat(allocCandidates),
+    Cat(winner),
+    upcpn.tableIdx,
+    upcpn.ghr,
+    uwrong
+  );
+  Trace(
+    "[Pred] Pred %x TableIdx %x GHR %b\n",
+    io.pred,
+    io.pcpn.tableIdx,
+    io.pcpn.ghr
+  )
 }
