@@ -49,7 +49,6 @@ object Elaborate extends App {
     FirtoolOption("--preserve-values=all"), // 保留中间变量名
     FirtoolOption("--strip-debug-info=0"), // 保留调试信息
     FirtoolOption("--emit-omir"), // 生成JSON
-    FirtoolOption("--export-chisel-interface"), // 導出Scala Chisel interface
     FirtoolOption("--export-module-hierarchy"), // 導出模塊實例樹
     FirtoolOption("-o=build/sv-gen") // 指定输出目录
   )
