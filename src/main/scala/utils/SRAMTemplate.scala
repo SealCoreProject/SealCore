@@ -30,9 +30,29 @@ class SRAMBundleR[T <: Data](private val gen: T, val way: Int = 1)
   val data = Output(Vec(way, gen))
 }
 
+/** @example
+  *   `io.r.req`:
+  *   - 类型: `Decoupled(new SRAMBundleA(set))`
+  *   - 含义: 读请求通道, `valid` 高时携带 `bits.setIdx` 指定读哪个「组」
+  *
+  * @example
+  *   `io.r.resp`:
+  *   - 类型: `Vec(way, gen)`
+  *   - 含义: 读返回的数据向量, 长度 = `way`
+  *
+  * @param gen
+  * @param set
+  * @param way
+  */
 class SRAMReadBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1)
     extends Bundle {
+
+  /** 读请求通道, `valid` 高时携带 `bits.setIdx` 指定读哪个「组」.
+    */
   val req = Decoupled(new SRAMBundleA(set))
+
+  /** 读返回的数据向量, 长度 = `way`.
+    */
   val resp = Flipped(new SRAMBundleR(gen, way))
 
   def apply(valid: Bool, setIdx: UInt) = {
@@ -42,11 +62,29 @@ class SRAMReadBus[T <: Data](private val gen: T, val set: Int, val way: Int = 1)
   }
 }
 
+/** @example
+  *   `io.w.req`
+  *   - 类型：Decoupled(new SRAMBundleAW(gen, set, way))
+  *   - 含义：写请求通道，valid 高时携带：
+  *     - bits.setIdx: 写哪个组
+  *     - bits.data: 写入的数据
+  *     - bits.waymask（可选）: 哪几路要写
+  *
+  * @param gen
+  * @param set
+  * @param way
+  */
 class SRAMWriteBus[T <: Data](
     private val gen: T,
     val set: Int,
     val way: Int = 1
 ) extends Bundle {
+
+  /** 写请求通道，valid 高时携带：
+    *   - bits.setIdx: 写哪个组
+    *   - bits.data: 写入的数据
+    *   - bits.waymask（可选）: 哪几路要写
+    */
   val req = Decoupled(new SRAMBundleAW(gen, set, way))
 
   def apply(valid: Bool, data: T, setIdx: UInt, waymask: UInt) = {
@@ -63,6 +101,14 @@ object FlushCmd {
   def apply() = UInt(1.W)
 }
 
+/** @example
+  *   `io.flush.req`(如果開啓`flushSet`)
+  *   - 类型: `Decoupled(new SRAMBundleFlush(gen, way))`
+  *   - 含义: 一个可选的刷新接口, 用于用 `flush.data`, `flush.cmd` 覆写或清空某些组
+  *
+  * @param gen
+  * @param way
+  */
 class SRAMBundleFlush[T <: Data](private val gen: T, val way: Int = 1)
     extends Bundle {
   val data = Output(gen)
@@ -92,8 +138,11 @@ class SRAMTemplate[T <: Data](
     gen: T,
     set: Int,
     way: Int = 1,
+    /** 启动上电清零(或固定值)逻辑 */
     shouldReset: Boolean = false,
+    /** 是否保持读——即在不出新请求时锁存上一次读结果 */
     holdRead: Boolean = false,
+    /** 单口模式下读写不能同时进行 */
     singlePort: Boolean = false,
     flushSet: Boolean = false,
     flushPriority: Boolean = false
@@ -179,6 +228,7 @@ class SRAMTemplateWithArbiter[T <: Data](
     gen: T,
     set: Int,
     way: Int = 1,
+    /** 启动上电清零(或固定值)逻辑 */
     shouldReset: Boolean = false,
     flushSet: Boolean = false,
     flushPriority: Boolean = false

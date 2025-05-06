@@ -21,7 +21,7 @@ import defs._
 /** Return Address Stack (RAS) for call/ret prediction.
   *
   *   - Full policy: Overwrite the oldest entry
-  *   - Empty policy: Raise `stall` signal
+  *   - Empty policy: None
   *   - Supports speculative push/pop with commit & rollback with one snapshot.
   *
   * RAS本身預測應當是絕對準確的, 帶來RAS的預測錯誤有以下幾點:
@@ -34,19 +34,16 @@ import defs._
   *
   * @note
   *   - 這個RAS中只能保存一個快照, 不建議應用到流水深度較大的芯片中.
+  *   - 这个RAS中并不反应栈空的情況(不進行Stall).
   *   - 在推測執行階段中PUSH造成覆蓋的情況, 沒有進行處理.
   *
   * @note
-  *   - 當在空棧的情況下, 會拉高Stall信號, 以指示外部停止動作.
-  *   - 當RAS空的情況下, 幾乎沒有可能做出正確預測.
-  *   - 在極大概率預測失敗的時候, 會造成TLB和MemCache的不必要開銷, 因此可以發送Stall信號以阻止取指動作.
-  *   - 當後端計算出缺失地址後, 將Pop拉低
+  *   - 我們假設在任何一個時刻, 訪問到的都是馬上可以Ret的值.
   *
   * @note
-  *   - 設計中, 棧指針永遠指向有效值, 因此判斷出一個Ret類型的時候, 可以直接獲得.
-  *   - 然後在同一個週期內, 將Pop信號拉低, 下一個週期的時候指針將會移動.
+  *   - 這個MiniRAS不提供空棧掛起功能.
   */
-class SimpleRAS(depth: Int = 16) extends SealModule {
+class MiniRAS(depth: Int = 16) extends SealModule {
   implicit val moduleName: String = this.name
   val maxDepthIdx = depth - 1
   val idxWidth = log2Ceil(depth)
@@ -58,7 +55,6 @@ class SimpleRAS(depth: Int = 16) extends SealModule {
     val rollback = Input(Bool())
 
     val out = Output(UInt(VAddrBits.W)) // predicted return address
-    val stall = Output(Bool()) // if stack is empty during ret
   })
 
   // Main stack
@@ -90,17 +86,13 @@ class SimpleRAS(depth: Int = 16) extends SealModule {
     count := Mux(count === maxDepthIdx.U, count, count + 1.U)
   }
 
-  // === Pop on ret ===
   when(io.pop) {
     count := Mux(count === 0.U, count, count - 1.U)
-    when(!isEmpty) {
-      sp := Mux(sp === 0.U, maxDepthIdx.U, sp - 1.U)
-    }
+    sp := Mux(sp === 0.U, maxDepthIdx.U, sp - 1.U)
   }
 
   // === Outputs ===
   io.out := stack(sp)
-  io.stall := isEmpty
 
   // === Log ===
   for ((entry, i) <- stack.zipWithIndex) {
@@ -108,7 +100,7 @@ class SimpleRAS(depth: Int = 16) extends SealModule {
   }
   Trace("sp %x count %x\n", sp, count)
 
-  Debug(io.push.valid, "PUSH addr 0x%x to SP %x\n", io.push.bits, sp)
+  Debug(io.push.valid, "PUSH addr 0x%x to NSP %x\n", io.push.bits, nsp)
   Debug(io.pop, "POP addr 0x%x from SP %x\n", stack(sp), sp)
   Debug(io.commit, "Commit SP %x count %x\n", sp, count)
   Debug(io.rollback, "RollBack SP %x count %x\n", sp, count)

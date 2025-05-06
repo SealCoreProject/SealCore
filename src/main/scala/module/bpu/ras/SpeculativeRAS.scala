@@ -16,6 +16,11 @@ import chisel3.util._
 
 /** SpeculativeRAS: 支援多層快照與回滾的 Return Address Stack
   *
+  *   - Full policy: Overwrite the oldest entry
+  *   - Empty policy: Raise `stall` signal
+  *   - Supports speculative push/pop with commit & rollback with multi-level
+  *     snapshot.
+  *
   * 爲了解決在推測執行期間再次發生推測執行, 打破簡單設計中的"一次錯誤, 一次回滾"的簡單假設, 我們需要多層次的快照, 通過Tag比對進行定點回退.
   *
   * @note

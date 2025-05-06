@@ -21,7 +21,7 @@ import module.bpu.ras.SimpleRAS
 import utils.LogUtil
 import utils.LogLevel.LogLevel
 
-class SimpleRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
+class MiniRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
   "SimpleRAS should handle push, pop, commit and rollback correctly" in {
     LogUtil.currentLogLevel = utils.LogLevel.OFF
     debugPrint = false
@@ -92,7 +92,6 @@ class SimpleRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
       // Stack now empty, next pop should stall
       dut.io.pop.poke(true.B)
       dut.clock.step(1)
-      dut.io.stall.peek().litToBoolean mustBe true
     }
   }
 }

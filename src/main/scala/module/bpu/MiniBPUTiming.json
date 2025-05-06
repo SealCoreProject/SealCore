@@ -1,0 +1,13 @@
+{signal: [
+  {name: 'CLK',        wave: 'p......' },
+  ['Pred', 
+   {name: 'in.pc.valid',wave: '01..' },
+   {name: 'in.pc.bits', wave: 'x3..' , data: ['0x4000']},
+   {name: 'out.valid',  wave: '0.1.' },
+   {name: 'out.bits',   wave: 'x.5.' , data: ['0x5000']},
+   {name: 'pcpn.ghr', wave: 'x.6.', data: '0x43126'},
+   {name: 'pcpn.tableIdx', wave: 'x.9.', data: '2'},
+  ],
+],
+  config: { 'hscale': 2 }
+}

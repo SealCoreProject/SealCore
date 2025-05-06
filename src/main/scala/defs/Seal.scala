@@ -36,6 +36,19 @@ trait HasSealParameter {
     case XLen._64 => 64
   }
 
+  /** 填充长度. 用于评估在当前宽度下, 有几个位是无效的.
+    *
+    * @example
+    *   - RV64架构中, PC(2, 0) 是无效的, 因为PC永远在+8, 所以低三位永远是0(或者无所谓)
+    *   - RV32架构中, PC(1, 0) 是无效的, 因为PC永远在+4, 所以低三位永远是0(或者无所谓)
+    *
+    * @return
+    */
+  val PadLEN = xlen match {
+    case XLen._32 => 2
+    case XLen._64 => 3
+  }
+
   val HasDiv = true
 
   /** 虛擬地址位寬, 由分頁方式決定

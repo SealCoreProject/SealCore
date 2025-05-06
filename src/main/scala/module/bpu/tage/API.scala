@@ -22,7 +22,6 @@ class MiniTagePredIO extends SealBundle {
   val in = new SealBundle {
     val pc = Input(UInt(VAddrBits.W)) // 當前取指PC
     val update = Flipped(Valid(new MiniTageUpdateIO))
-    val pcpn = Flipped(new PCPNInfo)
   }
 
   val out = new SealBundle {

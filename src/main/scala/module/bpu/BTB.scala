@@ -16,6 +16,40 @@ import chisel3.util._
 import utils._
 import defs._
 
+/** 分支預測單元更新包.
+  *
+  * 定義了用於更新分支預測單元信息的格式.
+  */
+class BTBUpdate extends SealBundle {
+
+  /** 更新時需要提供 PC
+    */
+  val pc = Output(UInt(VAddrBits.W))
+
+  /** 表示是否預測錯誤, 当預測方向或預測目標錯誤時, 需要拉高.
+    */
+  val isMissPredict = Output(Bool())
+
+  /** 實際的跳轉目標
+    */
+  val actualTarget = Output(UInt(VAddrBits.W))
+
+  /** 實際的跳轉方向(跳轉或不跳轉)
+    */
+  val actualTaken = Output(Bool())
+
+  /** 寫入BTB的類型
+    */
+  val btbType = Output(BTBtype())
+
+  /** 當前是否爲函數調用.
+    *
+    * 我們不將Call設計爲BTBtype.C類型, 是因爲C類型在LoongArch, MIPS, RISCV中都是J類型, 沒有必要進行額外存儲,
+    * 只需要進行額外判斷就好.
+    */
+  val call = Output(Bool())
+}
+
 /** BTB 類型
   */
 object BTBtype {
@@ -34,7 +68,7 @@ object BTBtype {
     */
   def I = "b10".U
 
-  /** CallRet 類型, 函數調用
+  /** Ret 類型, 函數調用
     *
     * @return
     */
@@ -43,20 +77,17 @@ object BTBtype {
   def apply() = UInt(2.W)
 }
 
-// // 表示地址的数据结构，并定义了一些方法辅助操作和获取地址字段的值。
-// class TableAddr(val idxBits: Int) extends MarCoreBundle {
-//   // 填充字段位宽
-//   val padLen =
-//     if (Settings.get("IsRV32") || !Settings.get("EnableOutOfOrderExec")) 2
-//     else 3
-//   // 标签字段位宽
-//   def tagBits = VAddrBits - padLen - idxBits
-//
-//   val tag = UInt(tagBits.W) // 标签
-//   val idx = UInt(idxBits.W) // 索引
-//   val pad = UInt(padLen.W) // 填充
-//
-//   def fromUInt(x: UInt) = x.asTypeOf(UInt(VAddrBits.W)).asTypeOf(this)
-//   def getTag(x: UInt) = fromUInt(x).tag
-//   def getIdx(x: UInt) = fromUInt(x).idx
-// }
+/** 表示地址的数据结构，并定义了一些方法辅助操作和获取地址字段的值。
+  */
+class TableAddr(val idxBits: Int) extends SealBundle {
+  // 标签字段位宽
+  def tagBits = VAddrBits - PadLEN - idxBits
+
+  val tag = UInt(tagBits.W) // 标签
+  val idx = UInt(idxBits.W) // 索引
+  val pad = UInt(PadLEN.W) // 填充
+
+  def fromUInt(x: UInt) = x.asTypeOf(UInt(VAddrBits.W)).asTypeOf(this)
+  def getTag(x: UInt) = fromUInt(x).tag
+  def getIdx(x: UInt) = fromUInt(x).idx
+}

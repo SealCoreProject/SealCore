@@ -53,7 +53,7 @@ private[tage] trait HasMiniTageParameter {
   *   - 尤其是當Table數量較大時, 傳遞信息需要的流水間寄存器將會非常大. 基於此, 我們選擇了傳遞GHR.
   *   - 代價就是會在分支預測模塊的面積會更大一些.
   */
-private[tage] class PCPNInfo extends SealBundle with HasMiniTageParameter {
+class PCPNInfo extends SealBundle with HasMiniTageParameter {
 
   /** 用於查詢 Tage Table 的 `修正下標`
     *
@@ -75,9 +75,7 @@ private[tage] class PCPNInfo extends SealBundle with HasMiniTageParameter {
 
 /** 更新包
   */
-private[tage] class MiniTageUpdateIO
-    extends SealBundle
-    with HasMiniTageParameter {
+class MiniTageUpdateIO extends SealBundle with HasMiniTageParameter {
   val pcpn = new PCPNInfo()
   val btb = new BTBUpdate()
 }
@@ -261,7 +259,8 @@ private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
   }
 
   // ==== Log 輸出 ====
-  Trace(
+  Debug(
+    uvalid,
     "[Update] AllocCandidates %b Winner %b pcpn: TableIdx %x GHR %b bpu: PredWrong %x\n",
     Cat(allocCandidates),
     Cat(winner),
