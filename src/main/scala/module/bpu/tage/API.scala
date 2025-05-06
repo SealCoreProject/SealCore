@@ -30,6 +30,18 @@ class MiniTagePredIO extends SealBundle {
   }
 }
 
+/** 對MiniTage的封裝與發行
+  *
+  * @version 1.0.0
+  *
+  * @since 1.0.0
+  *
+  * @author
+  *   Marina Zhang <inchinaxiaofeng@gmail.com>
+  *
+  * @note
+  *   - 1.0.0 Commit <35a260613e039edbd45e08ee96305ac35ece04de>
+  */
 class MiniTagePred extends SealModule {
   val io = IO(new MiniTagePredIO)
 

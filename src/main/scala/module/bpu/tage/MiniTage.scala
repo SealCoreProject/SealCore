@@ -107,16 +107,6 @@ class MiniTageUpdateIO extends SealBundle with HasMiniTageParameter {
   *   - 特性:
   *     - Tag 固定, Tag 不含 GHR
   *     - Index 由 PC 與 GHR Hash 得到.
-  *
-  * @note
-  *   version 記錄: 1.0.0 保證了功能性的絕對正確. Commit Log:<0c829d8>
-  *
-  * @version 1.0.0
-  *
-  * @author
-  *   Marina Zhang <inchinaxiaofeng@gmail.com>
-  *
-  * @since 1.0.0
   */
 private[tage] class MiniTage extends SealModule with HasMiniTageParameter {
   implicit val moduleName: String = this.name

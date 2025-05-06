@@ -56,6 +56,12 @@ trait HasMiniBPUParameter {
   * @version 1.0.0
   *
   * @since 1.0.0
+  *
+  * @author
+  *   Marina Zhang <inchinaxiaofeng@gmail.com>
+  *
+  * @note
+  *   - 1.0.0 Commit <35a260613e039edbd45e08ee96305ac35ece04de>
   */
 class MiniBPU extends SealModule with HasMiniBPUParameter {
   implicit val moduleName: String = this.name
