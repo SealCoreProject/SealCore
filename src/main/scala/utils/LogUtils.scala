@@ -59,14 +59,27 @@ object LogLevel extends Enumeration {
   *   - 通過 `LogUtil.enableColor = true` 來控制色彩化輸出.
   *     - 需要注意, 在一些EDA工具中, 不支持在Verilog中使用ANSI控制符.
   *     - 將enableColor設置爲false, 將不會添加控制符.
+  *   - 在任何情況下, 都不應該修改LogUtils的靜默選項.
   *   - FIXME : 目前尚不能在模塊內去指定. 可能是因爲要直接轉化爲Chisel中的類型,
   *     enableColor不能直接指定(Var轉不到Chisel Type, 只能被認爲是Val而不可變. 但是目前好像還好.)
   */
 object LogUtil extends HasColor {
-  var currentLogLevel: LogLevel = LogLevel.INFO
+  private var currentLogLevel: LogLevel = LogLevel.OFF
+
+  def setLogLevel(level: LogLevel) = {
+    currentLogLevel = level
+  }
 
   /** 用於指定當前LogUtils是否啓動 */
-  var display = true
+  private var display = false
+
+  def setDisplay(set: Boolean) = {
+    display = set
+  }
+
+  def getDisplay: Boolean = {
+    display
+  }
 
   /** 默認的Log色彩
     */
@@ -77,19 +90,6 @@ object LogUtil extends HasColor {
     LogLevel.WARN -> yellowFG,
     LogLevel.ERROR -> redFG
   )
-
-  def enhancedLog: Boolean = {
-    true
-  }
-
-  /** 將當前是否啓動轉化爲 Chisel 類型
-    *
-    * @return
-    *   Chisel Bool
-    */
-  def displayLog: Bool = {
-    display.B
-  }
 
   def apply(
       debugLevel: LogLevel
@@ -106,7 +106,7 @@ object LogUtil extends HasColor {
       case LogLevel.WARN  => currentLogLevel <= LogLevel.WARN
       case LogLevel.ERROR => currentLogLevel <= LogLevel.ERROR
     }
-    when(cond && displayLog && shouldPrint.B) {
+    when(cond && getDisplay.B && shouldPrint.B) {
       if (prefix) printf(commonInfo)
       printf(p"${colorCode}")
       printf(pable)
@@ -147,7 +147,7 @@ sealed abstract class LogHelper(val logLevel: LogLevel) {
   def apply(flag: Boolean = true, cond: Bool = true.B)(
       body: => Unit
   ): Any = {
-    if (flag) { when(cond && LogUtil.displayLog) { body } }
+    if (flag) { when(cond && LogUtil.getDisplay.B) { body } }
   }
 }
 

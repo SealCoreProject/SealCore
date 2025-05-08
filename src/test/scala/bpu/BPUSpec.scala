@@ -28,8 +28,9 @@ import chisel3.util.Valid
 
 class MiniBPUSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
   "MiniBPU comprehensive test" in {
-    // 关闭日志与 debug 打印
-    LogUtil.currentLogLevel = LogLevel.DEBUG
+    // 设置日志与 debug 打印
+    LogUtil.setLogLevel(LogLevel.DEBUG)
+    LogUtil.setDisplay(false)
     debugPrint = false
     tracePrint = true
     simulate(new MiniBPU) { dut =>
@@ -39,7 +40,6 @@ class MiniBPUSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         dut.io.in.pc.bits.poke(pc)
         dut.clock.step(1)
         dut.io.in.pc.valid.poke(false.B)
-        dut.clock.step(1) // 等待 BTB+TAGE 输出
         dut.io.out
       }
 

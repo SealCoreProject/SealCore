@@ -19,8 +19,7 @@ import org.scalatest.matchers.must.Matchers
 
 import module.bpu.tage.{MiniTage, MiniTagePred}
 import testutils.HasDebugPrint
-import utils.LogUtil
-import utils.LogLevel.LogLevel
+import utils.{LogUtil, LogLevel}
 
 /** This is a trivial example of how to run this Specification
   *
@@ -169,8 +168,8 @@ class MiniTageSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
   "MiniTage should correctly predict when there are complex jump patterns" in {
     debugPrint = false
     tracePrint = false
-    LogUtil.display = false
-    LogUtil.currentLogLevel = utils.LogLevel.TRACE
+    LogUtil.setDisplay(false)
+    LogUtil.setLogLevel(LogLevel.TRACE)
     simulate(new MiniTagePred()) { dut =>
       // 1) 模拟 while(true) 循环中的 if 判断
       // 对于PC1，代表判断 while 是否继续，PC2 判断是否退出。PC1 总是跳转，PC2 50次不跳转后进行一次跳转

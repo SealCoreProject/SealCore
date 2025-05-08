@@ -18,12 +18,11 @@ import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.must.Matchers
 import testutils._
 import module.bpu.ras.SimpleRAS
-import utils.LogUtil
-import utils.LogLevel.LogLevel
+import utils.{LogUtil, LogLevel}
 
 class MiniRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
   "SimpleRAS should handle push, pop, commit and rollback correctly" in {
-    LogUtil.currentLogLevel = utils.LogLevel.OFF
+    LogUtil.setLogLevel(LogLevel.OFF)
     debugPrint = false
     simulate(new SimpleRAS(4)) { dut =>
       def push(addr: Int): Unit = {
