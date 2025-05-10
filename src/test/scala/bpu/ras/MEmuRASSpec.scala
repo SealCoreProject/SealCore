@@ -17,20 +17,21 @@ import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.must.Matchers
 import testutils._
-import module.bpu.ras.SimpleRAS
 import utils.{LogUtil, LogLevel}
+import module.bpu.ras.MEmuRAS
 
-class SimpleRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
-  "SimpleRAS should handle push, pop, commit and rollback correctly" in {
+class MEmuRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
+  "MEmuRAS should handle push, pop, commit and rollback correctly" in {
     LogUtil.setLogLevel(LogLevel.OFF)
     debugPrint = false
-    simulate(new SimpleRAS(4)) { dut =>
+    simulate(new MEmuRAS(4)) { dut =>
       def push(addr: Int): Unit = {
         dut.io.push.valid.poke(true.B)
         dut.io.push.bits.poke(addr.U)
         dut.io.pop.poke(false.B)
         dut.clock.step(1)
         dut.io.push.valid.poke(false.B)
+        dut.clock.step(1)
       }
 
       def pop(): BigInt = {
@@ -39,6 +40,7 @@ class SimpleRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         val ret = dut.io.out.peek().litValue
         dut.clock.step(1)
         dut.io.pop.poke(false.B)
+        dut.clock.step(1)
         ret
       }
 
@@ -54,6 +56,7 @@ class SimpleRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
         dut.io.commit.poke(false.B)
         dut.clock.step(1)
         dut.io.rollback.poke(false.B)
+        dut.clock.step(1)
       }
 
       // Reset and warmup

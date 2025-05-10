@@ -17,7 +17,6 @@ import chisel3.internal.checkConnect
 import utils.Trace
 import utils.Debug
 import defs._
-import utils.SRAMTemplate
 
 /** Return Address Stack (RAS) for call/ret prediction.
   *
@@ -43,8 +42,13 @@ import utils.SRAMTemplate
   *
   * @note
   *   - 這個MiniRAS不提供空棧掛起功能.
+  *
+  * @note
+  *   - RG 全部由 Reg 组成, 同步写异步读.
+  *   - s 提供一个推测快照, 不提供空栈挂起.
+  *   - u 一个周期内.
   */
-class MiniRAS(depth: Int = 16) extends SealModule {
+class RGsuRAS(depth: Int = 16) extends SealModule {
   implicit val moduleName: String = this.name
   val maxDepthIdx = depth - 1
   val idxWidth = log2Ceil(depth)
@@ -58,14 +62,17 @@ class MiniRAS(depth: Int = 16) extends SealModule {
     val out = Output(UInt(VAddrBits.W)) // predicted return address
   })
 
-  // === Reg ===
+  // Main stack
+  val stack = Reg(Vec(depth, UInt(VAddrBits.W)))
   val sp = RegInit(0.U(idxWidth.W))
-  // For speculative support
-  val spCheckpoint = Reg(UInt(idxWidth.W))
-
-  // === Speculative rollback ===
+  // 指向PUSH時存入的
   val nsp = Mux(sp === maxDepthIdx.U, 0.U, sp + 1.U)
 
+  // For speculative support
+  val spCheckpoint = Reg(UInt(idxWidth.W))
+  val countCheckpoint = Reg(UInt(idxWidth.W))
+
+  // === Speculative rollback ===
   when(io.rollback) {
     sp := spCheckpoint
   }.elsewhen(io.commit) {
@@ -74,6 +81,7 @@ class MiniRAS(depth: Int = 16) extends SealModule {
 
   // === Push on call ===
   when(io.push.valid) {
+    stack(nsp) := io.push.bits
     sp := nsp
   }
 
@@ -81,22 +89,16 @@ class MiniRAS(depth: Int = 16) extends SealModule {
     sp := Mux(sp === 0.U, maxDepthIdx.U, sp - 1.U)
   }
 
-  // === MemOps ===
-  val rasMem = Module(new SRAMTemplate(UInt(VAddrBits.W), depth))
-  // 写端口: 在Push有效时, 把 Return-addr 写到 nsp
-  rasMem.io.w.req.valid := io.push.valid
-  rasMem.io.w.req.bits.setIdx := nsp
-  rasMem.io.w.req.bits.data := io.push.bits
-  // 读端口: 每周期都读当前 SP
-  rasMem.io.r.req.valid := true.B
-  rasMem.io.r.req.bits.setIdx := sp
-
-  // === Outputs way 0 ===
-  io.out := rasMem.io.r.resp.data(0)
+  // === Outputs ===
+  io.out := stack(sp)
 
   // === Log ===
-  Debug(io.push.valid, "PUSH to %x = 0x%x\n", nsp, io.push.bits)
-  Debug(io.pop, "POP from %x = 0x%x\n", sp, io.out)
-  Debug(io.commit, "Commit SP=%x\n", sp)
-  Debug(io.rollback, "RollBack SP=%x\n", sp)
+  for ((entry, i) <- stack.zipWithIndex) {
+    Trace("Stack(%d) %x\n", i.U, entry)
+  }
+
+  Debug(io.push.valid, "PUSH addr 0x%x to NSP %x\n", io.push.bits, nsp)
+  Debug(io.pop, "POP addr 0x%x from SP %x\n", stack(sp), sp)
+  Debug(io.commit, "Commit SP %x\n", sp)
+  Debug(io.rollback, "RollBack SP %x\n", sp)
 }

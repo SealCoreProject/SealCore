@@ -17,14 +17,14 @@ import chisel3.simulator.EphemeralSimulator._
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.must.Matchers
 import testutils._
-import module.bpu.ras.SimpleRAS
 import utils.{LogUtil, LogLevel}
+import module.bpu.ras.RGsuRAS
 
-class MiniRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
-  "SimpleRAS should handle push, pop, commit and rollback correctly" in {
+class RGsuRASSpec extends AnyFreeSpec with Matchers with HasDebugPrint {
+  "RGsuRAS should handle push, pop, commit and rollback correctly" in {
     LogUtil.setLogLevel(LogLevel.OFF)
     debugPrint = false
-    simulate(new SimpleRAS(4)) { dut =>
+    simulate(new RGsuRAS(4)) { dut =>
       def push(addr: Int): Unit = {
         dut.io.push.valid.poke(true.B)
         dut.io.push.bits.poke(addr.U)

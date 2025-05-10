@@ -18,7 +18,7 @@ import defs._
 import module.bpu.tage.MiniTagePred
 import module.bpu.tage.PCPNInfo
 import module.bpu.tage.MiniTageUpdateIO
-import module.bpu.ras.MiniRAS
+import module.bpu.ras.MEsuRAS
 
 class MiniBPUIO extends SealBundle {
   val in = new SealBundle {
@@ -53,7 +53,7 @@ trait HasMiniBPUParameter {
   * @note
   *   使用Wavedrom打开 MiniBPUTiming 可获取时序图
   *
-  * @version 1.0.0
+  * @version 1.1.0
   *
   * @since 1.0.0
   *
@@ -62,6 +62,8 @@ trait HasMiniBPUParameter {
   *
   * @note
   *   - 1.0.0 Commit <35a260613e039edbd45e08ee96305ac35ece04de>
+  *   - 1.1.0 Commit <>
+  *     - 将RAS替换为SyncReadMem.
   */
 class MiniBPU extends SealModule with HasMiniBPUParameter {
   implicit val moduleName: String = this.name
@@ -125,7 +127,7 @@ class MiniBPU extends SealModule with HasMiniBPUParameter {
   io.pcpn := pred.io.out.pcpn
 
   /* ==== RAS ==== */
-  val ras = Module(new MiniRAS(depth = NRras))
+  val ras = Module(new MEsuRAS(depth = NRras))
   ras.io.commit := btbRead._type === BTBtype.B // Mux(btbRead._type === BTBtype.B, btbHit, false.B)
   ras.io.rollback := Mux(
     io.update.valid && io.update.bits.btb.btbType === BTBtype.B,

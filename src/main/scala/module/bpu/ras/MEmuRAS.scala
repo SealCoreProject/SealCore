@@ -17,6 +17,7 @@ import chisel3.internal.checkConnect
 import utils.Trace
 import utils.Debug
 import defs._
+import utils.SRAMTemplate
 
 /** Return Address Stack (RAS) for call/ret prediction.
   *
@@ -46,7 +47,7 @@ import defs._
   *   - 設計中, 棧指針永遠指向有效值, 因此判斷出一個Ret類型的時候, 可以直接獲得.
   *   - 然後在同一個週期內, 將Pop信號拉低, 下一個週期的時候指針將會移動.
   */
-class SimpleRAS(depth: Int = 16) extends SealModule {
+class MEmuRAS(depth: Int = 16) extends SealModule {
   implicit val moduleName: String = this.name
   val maxDepthIdx = depth - 1
   val idxWidth = log2Ceil(depth)
@@ -62,17 +63,16 @@ class SimpleRAS(depth: Int = 16) extends SealModule {
   })
 
   // Main stack
-  val stack = Reg(Vec(depth, UInt(VAddrBits.W)))
   val sp = RegInit(0.U(idxWidth.W))
-  // 指向PUSH時存入的
-  val nsp = Mux(sp === maxDepthIdx.U, 0.U, sp + 1.U)
-  // 有效數據計數
   val count = RegInit(0.U(idxWidth.W))
   val isEmpty = count === 0.U
 
   // For speculative support
   val spCheckpoint = Reg(UInt(idxWidth.W))
   val countCheckpoint = Reg(UInt(idxWidth.W))
+
+  val nsp = Mux(sp === maxDepthIdx.U, 0.U, sp + 1.U)
+  val psp = Mux(sp === 0.U, maxDepthIdx.U, sp - 1.U)
 
   // === Speculative rollback ===
   when(io.rollback) {
@@ -85,7 +85,6 @@ class SimpleRAS(depth: Int = 16) extends SealModule {
 
   // === Push on call ===
   when(io.push.valid) {
-    stack(nsp) := io.push.bits
     sp := nsp
     count := Mux(count === maxDepthIdx.U, count, count + 1.U)
   }
@@ -94,22 +93,27 @@ class SimpleRAS(depth: Int = 16) extends SealModule {
   when(io.pop) {
     count := Mux(count === 0.U, count, count - 1.U)
     when(!isEmpty) {
-      sp := Mux(sp === 0.U, maxDepthIdx.U, sp - 1.U)
+      sp := psp
     }
   }
 
+  // === MemOps ===
+  val rasMem = Module(new SRAMTemplate(UInt(VAddrBits.W), depth))
+  // 写端口: 在Push有效时, 把 Return-addr 写到 nsp
+  rasMem.io.w.req.valid := io.push.valid
+  rasMem.io.w.req.bits.setIdx := nsp
+  rasMem.io.w.req.bits.data := io.push.bits
+  // 读端口: 每周期都读当前 SP
+  rasMem.io.r.req.valid := true.B
+  rasMem.io.r.req.bits.setIdx := sp
+
   // === Outputs ===
-  io.out := stack(sp)
+  io.out := rasMem.io.r.resp.data(0)
   io.stall := isEmpty
 
   // === Log ===
-  for ((entry, i) <- stack.zipWithIndex) {
-    Trace("Stack(%d) %x\n", i.U, entry)
-  }
-  Trace("sp %x count %x\n", sp, count)
-
-  Debug(io.push.valid, "PUSH addr 0x%x to SP %x\n", io.push.bits, sp)
-  Debug(io.pop, "POP addr 0x%x from SP %x\n", stack(sp), sp)
-  Debug(io.commit, "Commit SP %x count %x\n", sp, count)
-  Debug(io.rollback, "RollBack SP %x count %x\n", sp, count)
+  Debug(io.push.valid, "PUSH to %x = 0x%x\n", nsp, io.push.bits)
+  Debug(io.pop, "POP from %x = 0x%x\n", sp, io.out)
+  Debug(io.commit, "Commit SP=%x count=%x\n", sp, count)
+  Debug(io.rollback, "RollBack SP=%x count=%x\n", sp, count)
 }
